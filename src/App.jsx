@@ -151,18 +151,49 @@ function App() {
   }
 
   const stopRecording = () => {
-    // Prevent multiple stop calls
-    if (!isRecording || !mediaRecorderRef.current) {
+    console.log('stopRecording called', { isRecording, hasRecorder: !!mediaRecorderRef.current })
+    
+    // Allow stop even if state says not recording (in case of sync issues)
+    if (!mediaRecorderRef.current) {
+      // No recorder exists, just reset state
+      setIsRecording(false)
+      isProcessingRef.current = false
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+      return
+    }
+
+    // If already stopped, just clean up
+    if (mediaRecorderRef.current.state === 'inactive') {
+      setIsRecording(false)
+      isProcessingRef.current = false
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => {
+          track.stop()
+          track.enabled = false
+        })
+        streamRef.current = null
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
       return
     }
 
     try {
+      // Immediately set state to prevent double-clicks
+      setIsRecording(false)
+      isProcessingRef.current = true
+      
       // Stop the media recorder
-      if (mediaRecorderRef.current.state !== 'inactive') {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop()
       }
       
-      // Stop all media tracks
+      // Stop all media tracks immediately
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => {
           track.stop()
@@ -171,19 +202,30 @@ function App() {
         streamRef.current = null
       }
       
-      // Clear timer
+      // Clear timer immediately
       if (timerRef.current) {
         clearInterval(timerRef.current)
         timerRef.current = null
       }
       
-      // Reset state
-      setIsRecording(false)
-      isProcessingRef.current = false
+      // Note: isProcessingRef will be set to false in onstop handler
     } catch (error) {
       console.error('Error stopping recording:', error)
       setIsRecording(false)
       isProcessingRef.current = false
+      
+      // Force cleanup on error
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => {
+          track.stop()
+          track.enabled = false
+        })
+        streamRef.current = null
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
     }
   }
 
@@ -452,15 +494,14 @@ function App() {
                   e.preventDefault()
                   e.stopPropagation()
                   
-                  // Only proceed if not already processing
-                  if (isProcessingRef.current) {
-                    return
-                  }
-                  
                   if (isRecording) {
+                    // Always allow stopping
                     stopRecording()
                   } else {
-                    startRecording()
+                    // Only start if not processing
+                    if (!isProcessingRef.current) {
+                      startRecording()
+                    }
                   }
                 }}
                 onTouchStart={(e) => {
@@ -468,15 +509,14 @@ function App() {
                   e.stopPropagation()
                   touchHandledRef.current = true
                   
-                  // Only handle if not already processing
-                  if (isProcessingRef.current) {
-                    return
-                  }
-                  
                   if (isRecording) {
+                    // Always allow stopping
                     stopRecording()
                   } else {
-                    startRecording()
+                    // Only start if not processing
+                    if (!isProcessingRef.current) {
+                      startRecording()
+                    }
                   }
                   
                   // Reset touch flag after a delay
@@ -484,7 +524,6 @@ function App() {
                     touchHandledRef.current = false
                   }, 300)
                 }}
-                disabled={isProcessingRef.current && !isRecording}
                 title="Record a fresh voicemail."
               >
                 <div className={`record-dot ${isRecording ? 'pulsing' : ''}`}></div>
