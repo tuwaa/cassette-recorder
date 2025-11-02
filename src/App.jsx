@@ -44,6 +44,23 @@ function App() {
     }
   }, [editingId, editingField])
 
+  // Ensure audio element is loaded when recording is selected
+  useEffect(() => {
+    if (audioRef.current) {
+      // Always stop and reload when selection changes
+      audioRef.current.pause()
+      setIsPlaying(false)
+      if (selectedRecording?.url) {
+        // Small delay to ensure src is set before loading
+        setTimeout(() => {
+          if (audioRef.current) {
+            audioRef.current.load()
+          }
+        }, 0)
+      }
+    }
+  }, [selectedRecording?.id])
+
   const startRecording = async () => {
     try {
       // Stop any playing audio
@@ -112,25 +129,37 @@ function App() {
     }
   }
 
-  const playBeepSound = () => {
-    return new Promise((resolve) => {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
-      const oscillator = audioContext.createOscillator()
-      const gainNode = audioContext.createGain()
+  const playBeepSound = async () => {
+    try {
+      let audioContext = new (window.AudioContext || window.webkitAudioContext)()
       
-      oscillator.connect(gainNode)
-      gainNode.connect(audioContext.destination)
+      // Resume AudioContext if suspended (required on mobile)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume()
+      }
       
-      oscillator.frequency.value = 800
-      oscillator.type = 'sine'
-      
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
-      
-      oscillator.onended = resolve
-      oscillator.start(audioContext.currentTime)
-      oscillator.stop(audioContext.currentTime + 0.3)
-    })
+      return new Promise((resolve) => {
+        const oscillator = audioContext.createOscillator()
+        const gainNode = audioContext.createGain()
+        
+        oscillator.connect(gainNode)
+        gainNode.connect(audioContext.destination)
+        
+        oscillator.frequency.value = 800
+        oscillator.type = 'sine'
+        
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
+        
+        oscillator.onended = resolve
+        oscillator.start(audioContext.currentTime)
+        oscillator.stop(audioContext.currentTime + 0.3)
+      })
+    } catch (error) {
+      console.warn('Beep sound failed:', error)
+      // Resolve anyway so playback continues
+      return Promise.resolve()
+    }
   }
 
   const handleSelectRecording = (id) => {
@@ -147,9 +176,25 @@ function App() {
         audioRef.current.pause()
         setIsPlaying(false)
       } else {
-        await playBeepSound()
-        audioRef.current.play()
-        setIsPlaying(true)
+        try {
+          // Play beep sound (non-blocking on mobile)
+          playBeepSound().catch(() => {})
+          
+          // Load and play audio with error handling
+          audioRef.current.load() // Ensure audio is loaded on mobile
+          const playPromise = audioRef.current.play()
+          
+          if (playPromise !== undefined) {
+            await playPromise
+            setIsPlaying(true)
+          } else {
+            setIsPlaying(true)
+          }
+        } catch (error) {
+          console.error('Error playing audio:', error)
+          setIsPlaying(false)
+          alert('Could not play audio. Please try again.')
+        }
       }
     }
   }
@@ -158,9 +203,25 @@ function App() {
     if (audioRef.current && selectedRecording) {
       audioRef.current.currentTime = 0
       if (!isPlaying) {
-        await playBeepSound()
-        setIsPlaying(true)
-        audioRef.current.play()
+        try {
+          // Play beep sound (non-blocking on mobile)
+          playBeepSound().catch(() => {})
+          
+          // Load and play audio with error handling
+          audioRef.current.load()
+          const playPromise = audioRef.current.play()
+          
+          if (playPromise !== undefined) {
+            await playPromise
+            setIsPlaying(true)
+          } else {
+            setIsPlaying(true)
+          }
+        } catch (error) {
+          console.error('Error playing audio:', error)
+          setIsPlaying(false)
+          alert('Could not play audio. Please try again.')
+        }
       }
     }
   }
@@ -318,14 +379,22 @@ function App() {
             </div>
 
             {/* Hidden audio element */}
-            {selectedRecording && selectedRecording.url && (
-              <audio
-                ref={audioRef}
-                src={selectedRecording.url}
-                onEnded={handleAudioEnded}
-                onPause={() => setIsPlaying(false)}
-              />
-            )}
+            <audio
+              ref={audioRef}
+              src={selectedRecording?.url || ''}
+              onEnded={handleAudioEnded}
+              onPause={() => setIsPlaying(false)}
+              onLoadedData={() => {
+                // Audio is loaded and ready
+                console.log('Audio loaded and ready')
+              }}
+              onError={(e) => {
+                console.error('Audio error:', e)
+                setIsPlaying(false)
+              }}
+              preload="auto"
+              playsInline
+            />
           </div>
         </div>
 
