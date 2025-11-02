@@ -18,6 +18,7 @@ function App() {
   const timerRef = useRef(null)
   const editInputRef = useRef(null)
   const isProcessingRef = useRef(false)
+  const touchHandledRef = useRef(false)
 
   const selectedRecording = recordings.find(r => r.id === selectedRecordingId)
 
@@ -91,25 +92,48 @@ function App() {
       }
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-        const url = URL.createObjectURL(blob)
-        const now = new Date()
-        const dateStr = now.toISOString().split('T')[0]
-        const timeStr = now.toTimeString().split(' ')[0].substring(0, 5)
-        
-        const newRecording = {
-          id: Date.now().toString(),
-          name: `Recording ${recordings.length + 1}`,
-          blob,
-          url,
-          date: dateStr,
-          time: timeStr
-        }
+        try {
+          // Ensure we're actually stopped
+          setIsRecording(false)
+          
+          // Clear any remaining stream
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => {
+              track.stop()
+              track.enabled = false
+            })
+            streamRef.current = null
+          }
+          
+          // Create blob only if we have chunks
+          if (chunksRef.current.length > 0) {
+            const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+            const url = URL.createObjectURL(blob)
+            const now = new Date()
+            const dateStr = now.toISOString().split('T')[0]
+            const timeStr = now.toTimeString().split(' ')[0].substring(0, 5)
+            
+            const newRecording = {
+              id: Date.now().toString(),
+              name: `Recording ${recordings.length + 1}`,
+              blob,
+              url,
+              date: dateStr,
+              time: timeStr
+            }
 
-        setRecordings(prev => [...prev, newRecording])
-        setSelectedRecordingId(newRecording.id)
-        setRecordingTime(0)
-        isProcessingRef.current = false
+            setRecordings(prev => [...prev, newRecording])
+            setSelectedRecordingId(newRecording.id)
+          }
+          
+          setRecordingTime(0)
+          chunksRef.current = []
+          isProcessingRef.current = false
+        } catch (error) {
+          console.error('Error in onstop handler:', error)
+          setIsRecording(false)
+          isProcessingRef.current = false
+        }
       }
 
       mediaRecorder.start()
@@ -127,15 +151,38 @@ function App() {
   }
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop()
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
+    // Prevent multiple stop calls
+    if (!isRecording || !mediaRecorderRef.current) {
+      return
+    }
+
+    try {
+      // Stop the media recorder
+      if (mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop()
       }
-      setIsRecording(false)
+      
+      // Stop all media tracks
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => {
+          track.stop()
+          track.enabled = false
+        })
+        streamRef.current = null
+      }
+      
+      // Clear timer
       if (timerRef.current) {
         clearInterval(timerRef.current)
+        timerRef.current = null
       }
+      
+      // Reset state
+      setIsRecording(false)
+      isProcessingRef.current = false
+    } catch (error) {
+      console.error('Error stopping recording:', error)
+      setIsRecording(false)
       isProcessingRef.current = false
     }
   }
@@ -394,25 +441,50 @@ function App() {
               <button
                 className={`control-btn record-btn ${isRecording ? 'recording' : ''}`}
                 onClick={(e) => {
-                  // Only handle click if it wasn't already handled by touch
-                  if (!e.defaultPrevented) {
+                  // Ignore click if it was already handled by touch
+                  if (touchHandledRef.current) {
+                    touchHandledRef.current = false
                     e.preventDefault()
-                    if (isRecording) {
-                      stopRecording()
-                    } else {
-                      startRecording()
-                    }
+                    e.stopPropagation()
+                    return
                   }
-                }}
-                onTouchStart={(e) => {
+                  
                   e.preventDefault()
                   e.stopPropagation()
+                  
+                  // Only proceed if not already processing
+                  if (isProcessingRef.current) {
+                    return
+                  }
+                  
                   if (isRecording) {
                     stopRecording()
                   } else {
                     startRecording()
                   }
                 }}
+                onTouchStart={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  touchHandledRef.current = true
+                  
+                  // Only handle if not already processing
+                  if (isProcessingRef.current) {
+                    return
+                  }
+                  
+                  if (isRecording) {
+                    stopRecording()
+                  } else {
+                    startRecording()
+                  }
+                  
+                  // Reset touch flag after a delay
+                  setTimeout(() => {
+                    touchHandledRef.current = false
+                  }, 300)
+                }}
+                disabled={isProcessingRef.current && !isRecording}
                 title="Record a fresh voicemail."
               >
                 <div className={`record-dot ${isRecording ? 'pulsing' : ''}`}></div>
