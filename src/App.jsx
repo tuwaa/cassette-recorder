@@ -22,6 +22,29 @@ function App() {
 
   const selectedRecording = recordings.find(r => r.id === selectedRecordingId)
 
+  // Detect supported audio MIME type
+  const getSupportedMimeType = () => {
+    const types = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+      'audio/m4a',
+      'audio/ogg;codecs=opus',
+      'audio/ogg'
+    ]
+    
+    for (const type of types) {
+      if (MediaRecorder.isTypeSupported(type)) {
+        console.log('Using MIME type:', type)
+        return type
+      }
+    }
+    
+    // Fallback to default
+    console.warn('No specific MIME type supported, using default')
+    return ''
+  }
+
   useEffect(() => {
     return () => {
       if (streamRef.current) {
@@ -78,16 +101,37 @@ function App() {
         setIsPlaying(false)
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // Get audio stream with better quality settings for mobile
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100
+        } 
+      })
       streamRef.current = stream
 
-      const mediaRecorder = new MediaRecorder(stream)
+      // Get supported MIME type
+      const mimeType = getSupportedMimeType()
+      
+      // Create MediaRecorder with options
+      const options = mimeType ? { mimeType } : {}
+      
+      // For mobile, add timeslice to ensure data is available
+      const mediaRecorder = new MediaRecorder(stream, options)
       mediaRecorderRef.current = mediaRecorder
       chunksRef.current = []
+      
+      // Log MediaRecorder state for debugging
+      mediaRecorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event.error)
+      }
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           chunksRef.current.push(event.data)
+          console.log('Data chunk received:', event.data.size, 'bytes')
         }
       }
 
@@ -107,8 +151,24 @@ function App() {
           
           // Create blob only if we have chunks
           if (chunksRef.current.length > 0) {
-            const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+            // Determine the correct MIME type based on what was recorded
+            let blobType = 'audio/webm'
+            const mimeType = mediaRecorderRef.current?.mimeType || ''
+            
+            if (mimeType.includes('mp4') || mimeType.includes('m4a')) {
+              blobType = 'audio/mp4'
+            } else if (mimeType.includes('ogg')) {
+              blobType = 'audio/ogg'
+            } else if (mimeType.includes('webm')) {
+              blobType = 'audio/webm'
+            }
+            
+            console.log('Creating blob with type:', blobType, 'chunks:', chunksRef.current.length)
+            
+            const blob = new Blob(chunksRef.current, { type: blobType })
             const url = URL.createObjectURL(blob)
+            
+            console.log('Blob created:', blob.size, 'bytes', 'URL:', url)
             const now = new Date()
             const dateStr = now.toISOString().split('T')[0]
             const timeStr = now.toTimeString().split(' ')[0].substring(0, 5)
@@ -136,9 +196,13 @@ function App() {
         }
       }
 
-      mediaRecorder.start()
+      // Start recording with timeslice for mobile compatibility
+      // This ensures data chunks are available regularly
+      mediaRecorder.start(100) // Capture data every 100ms
       setIsRecording(true)
       setRecordingTime(0)
+      
+      console.log('Recording started with MIME type:', mediaRecorder.mimeType)
 
       timerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1)
@@ -190,6 +254,13 @@ function App() {
       
       // Stop the media recorder
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        // Request final data chunk before stopping (important for iOS/mobile)
+        try {
+          mediaRecorderRef.current.requestData()
+        } catch (e) {
+          console.warn('Could not request data:', e)
+        }
+        
         mediaRecorderRef.current.stop()
       }
       
