@@ -6,6 +6,9 @@
   align-items: flex-start;
   padding: 20px;
   background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  /* Ensure touch events work */
+  touch-action: pan-y pinch-zoom;
+  -webkit-overflow-scrolling: touch;
 }
 
 .app-container {
@@ -34,6 +37,9 @@
   border: 3px solid #0a0a0a;
   position: relative;
   transform: rotateX(5deg);
+  /* Ensure buttons are clickable */
+  pointer-events: auto;
+  z-index: 1;
 }
 
 /* Cassette Label */
@@ -197,6 +203,13 @@
   position: relative;
   min-height: 90px;
   justify-content: center;
+  /* Mobile touch support */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .control-btn:hover:not(:disabled) {
@@ -217,6 +230,8 @@
 .control-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+  pointer-events: none;
+  touch-action: none;
 }
 
 .control-btn svg {
@@ -359,6 +374,10 @@
   transition: all 0.2s ease;
   text-transform: uppercase;
   letter-spacing: 1px;
+  /* Mobile touch support */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
 .cancel-btn {
@@ -451,6 +470,10 @@
   box-shadow: 
     0 2px 8px rgba(0, 0, 0, 0.3),
     inset 0 1px 2px rgba(255, 255, 255, 0.05);
+  /* Mobile touch support */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(255, 215, 0, 0.2);
+  user-select: none;
 }
 
 .recording-item:hover {
@@ -558,6 +581,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Mobile touch support */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .delete-item-btn:hover {
@@ -610,14 +639,20 @@
   }
 
   .control-btn {
-    padding: 12px 8px;
-    font-size: 11px;
-    min-height: 75px;
+    padding: 16px 12px;
+    font-size: 12px;
+    min-height: 80px;
+    min-width: 80px;
   }
 
   .control-btn svg {
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
+  }
+
+  .record-btn {
+    min-height: 60px;
+    padding: 16px;
   }
 
   .recordings-sidebar {

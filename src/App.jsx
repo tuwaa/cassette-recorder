@@ -321,12 +321,18 @@ function App() {
             {/* Controls panel */}
             <div className="controls-panel">
               <div className="button-row">
-                <button
-                  className="control-btn play-btn"
-                  onClick={handlePlay}
-                  disabled={!selectedRecording || isRecording}
-                  title="Listen to this message."
-                >
+              <button
+                className="control-btn play-btn"
+                onClick={handlePlay}
+                onTouchStart={(e) => {
+                  e.preventDefault()
+                  if (!isRecording && selectedRecording) {
+                    handlePlay()
+                  }
+                }}
+                disabled={!selectedRecording || isRecording}
+                title="Listen to this message."
+              >
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     {isPlaying ? (
                       <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
@@ -337,24 +343,36 @@ function App() {
                   <span>Play</span>
                 </button>
 
-                <button
-                  className="control-btn rewind-btn"
-                  onClick={handleRewind}
-                  disabled={!selectedRecording || isRecording}
-                  title="Go back to the start."
-                >
+              <button
+                className="control-btn rewind-btn"
+                onClick={handleRewind}
+                onTouchStart={(e) => {
+                  e.preventDefault()
+                  if (!isRecording && selectedRecording) {
+                    handleRewind()
+                  }
+                }}
+                disabled={!selectedRecording || isRecording}
+                title="Go back to the start."
+              >
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/>
                   </svg>
                   <span>Rewind</span>
                 </button>
 
-                <button
-                  className="control-btn delete-btn"
-                  onClick={() => selectedRecording && handleDelete(selectedRecording.id)}
-                  disabled={!selectedRecording || isRecording}
-                  title="Permanently remove this message."
-                >
+              <button
+                className="control-btn delete-btn"
+                onClick={() => selectedRecording && handleDelete(selectedRecording.id)}
+                onTouchStart={(e) => {
+                  e.preventDefault()
+                  if (!isRecording && selectedRecording) {
+                    handleDelete(selectedRecording.id)
+                  }
+                }}
+                disabled={!selectedRecording || isRecording}
+                title="Permanently remove this message."
+              >
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                   </svg>
@@ -365,6 +383,14 @@ function App() {
               <button
                 className={`control-btn record-btn ${isRecording ? 'recording' : ''}`}
                 onClick={isRecording ? stopRecording : startRecording}
+                onTouchStart={(e) => {
+                  e.preventDefault()
+                  if (isRecording) {
+                    stopRecording()
+                  } else {
+                    startRecording()
+                  }
+                }}
                 title="Record a fresh voicemail."
               >
                 <div className={`record-dot ${isRecording ? 'pulsing' : ''}`}></div>
@@ -414,6 +440,13 @@ function App() {
                   key={recording.id}
                   className={`recording-item ${selectedRecordingId === recording.id ? 'selected' : ''}`}
                   onClick={() => handleSelectRecording(recording.id)}
+                  onTouchStart={(e) => {
+                    // Only trigger if not editing or clicking delete button
+                    if (!e.target.closest('.delete-item-btn') && !e.target.closest('.edit-input')) {
+                      e.preventDefault()
+                      handleSelectRecording(recording.id)
+                    }
+                  }}
                 >
                   <div className="recording-content">
                     <div className="recording-name-section">
