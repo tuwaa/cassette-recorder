@@ -17,6 +17,7 @@ function App() {
   const chunksRef = useRef([])
   const timerRef = useRef(null)
   const editInputRef = useRef(null)
+  const isProcessingRef = useRef(false)
 
   const selectedRecording = recordings.find(r => r.id === selectedRecordingId)
 
@@ -62,6 +63,13 @@ function App() {
   }, [selectedRecording?.id])
 
   const startRecording = async () => {
+    // Prevent double-firing
+    if (isRecording || isProcessingRef.current) {
+      return
+    }
+
+    isProcessingRef.current = true
+
     try {
       // Stop any playing audio
       if (audioRef.current) {
@@ -101,6 +109,7 @@ function App() {
         setRecordings(prev => [...prev, newRecording])
         setSelectedRecordingId(newRecording.id)
         setRecordingTime(0)
+        isProcessingRef.current = false
       }
 
       mediaRecorder.start()
@@ -113,6 +122,7 @@ function App() {
     } catch (error) {
       console.error('Error accessing microphone:', error)
       alert('Could not access microphone. Please allow microphone permissions.')
+      isProcessingRef.current = false
     }
   }
 
@@ -126,6 +136,7 @@ function App() {
       if (timerRef.current) {
         clearInterval(timerRef.current)
       }
+      isProcessingRef.current = false
     }
   }
 
@@ -382,9 +393,20 @@ function App() {
 
               <button
                 className={`control-btn record-btn ${isRecording ? 'recording' : ''}`}
-                onClick={isRecording ? stopRecording : startRecording}
+                onClick={(e) => {
+                  // Only handle click if it wasn't already handled by touch
+                  if (!e.defaultPrevented) {
+                    e.preventDefault()
+                    if (isRecording) {
+                      stopRecording()
+                    } else {
+                      startRecording()
+                    }
+                  }
+                }}
                 onTouchStart={(e) => {
                   e.preventDefault()
+                  e.stopPropagation()
                   if (isRecording) {
                     stopRecording()
                   } else {
